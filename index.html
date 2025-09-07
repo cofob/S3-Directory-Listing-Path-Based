@@ -108,16 +108,11 @@
             color: #888 !important;
         }
     </style>
-    <link id="dark-mode-style" rel="stylesheet" href="dark-mode.css">
 </head>
 
 <body>
     <div class="container">
         <h1 class="my-4">S3 Directory Listing</h1>
-        <div class="custom-control custom-switch my-3">
-            <input type="checkbox" class="custom-control-input" id="darkModeSwitch">
-            <label class="custom-control-label" for="darkModeSwitch">Dark Mode</label>
-        </div>
         <nav id="breadcrumb" class="breadcrumb">
         </nav>
         <input class="form-control mb-3" id="search" type="text" placeholder="Search...">
@@ -316,7 +311,7 @@
                     displayedItems.forEach((item) => {
                         // Skip files used by the page itself
                         const fileName = item.key.split('/').pop();
-                        if (['index.html', 's3.js', 'dark-mode.css', 'config.js'].includes(fileName)) {
+                        if (['index.html'].includes(fileName)) {
                             return;
                         }
 
@@ -370,34 +365,8 @@
             }
         });
 
-        const darkModeSwitch = document.getElementById('darkModeSwitch');
-
-        darkModeSwitch.addEventListener('change', (e) => {
-            const darkModeStyle = document.getElementById('dark-mode-style');
-            if (e.target.checked) {
-                darkModeStyle.disabled = false;
-                localStorage.setItem('darkMode', 'true');
-            } else {
-                darkModeStyle.disabled = true;
-                localStorage.setItem('darkMode', 'false');
-            }
-
-        });
-
-        const darkModeStyle = document.getElementById('dark-mode-style');
-        if (localStorage.getItem('darkMode') === 'true') {
-            darkModeSwitch.checked = true;
-            darkModeStyle.disabled = false;
-        } else {
-            darkModeSwitch.checked = false;
-            darkModeStyle.disabled = true;
-        }
-
-        // --- START: MODIFIED CODE ---
         // Initial call to navigateTo uses the currentPath derived from the URL parameter
         navigateTo(currentPath);
-        // --- END: MODIFIED CODE ---
-
 
         // Pagination controls logic
         document.getElementById('prevPage').addEventListener('click', function () {
