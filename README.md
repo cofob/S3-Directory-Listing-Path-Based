@@ -5,7 +5,7 @@ Welcome to the **S3-Directory-Listing** project! Are you tired of the boring, ge
 
 ## Fork
 
-Path-based API. Self-contained `index.html` with dark mode enabled by default. Easier deployment.
+Path-based API. Self-contained `index.html` with dark mode only. Easier deployment. Added support for `?prefix` to url params.
 
 ## Usage 🚀
 
