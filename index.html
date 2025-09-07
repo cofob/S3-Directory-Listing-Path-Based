@@ -170,7 +170,20 @@
 
         let totalPages = 0;
         let currentPage = 1;
-        let currentPath = '';
+
+        // Helper function to get query parameters from the URL
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        // Set the initial path from the '?prefix=' URL parameter, or default to root
+        let currentPath = getQueryParam('prefix') || '';
+
+        // Ensure the prefix ends with a '/' if it's a folder path
+        if (currentPath && !currentPath.endsWith('/')) {
+            currentPath += '/';
+        }
 
         function isFolder(key) {
             return key.endsWith('/');
@@ -213,7 +226,11 @@
             const parts = path.split('/').filter((part) => part);
             let crumbPath = '';
 
-            breadcrumb.innerHTML = '<li class="breadcrumb-item"><a href="index.html">Home</a></li>';
+            // --- START: MODIFIED CODE ---
+            // Update the Home link to include the base URL without query parameters
+            const homeUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            breadcrumb.innerHTML = `<li class="breadcrumb-item"><a href="${homeUrl}">Home</a></li>`;
+            // --- END: MODIFIED CODE ---
 
             parts.forEach((part, index) => {
                 crumbPath += part + '/';
@@ -225,12 +242,14 @@
                     listItem.classList.add('active');
                 } else {
                     const link = document.createElement('a');
-                    link.href = crumbPath;
+                    link.href = '?prefix=' + crumbPath; // Update href for better navigation context
                     link.textContent = part;
                     let thisCrumbPath = crumbPath;
                     link.onclick = (e) => {
                         currentPage = 1
                         e.preventDefault();
+                        // Update URL in browser history for better user experience
+                        history.pushState(null, '', '?prefix=' + thisCrumbPath);
                         navigateTo(thisCrumbPath);
                     }
                     listItem.appendChild(link);
@@ -256,7 +275,7 @@
         }
 
         function listObjects(path) {
-            const prefix = path ? `prefix=${path}&` : '';
+            const prefix = path ? `prefix=${encodeURIComponent(path)}&` : '';
             const url = `https://${s3Domain}/${bucketName}/?list-type=2&${prefix}delimiter=%2F`;
 
             loading.classList.remove('d-none');
@@ -272,77 +291,59 @@
                 .then((text) => {
                     const parser = new DOMParser();
                     const xmlDoc = parser.parseFromString(text, 'text/xml');
-                    const keys = xmlDoc.getElementsByTagName('Key');
-                    const prefixes = xmlDoc.getElementsByTagName('Prefix');
+                    const contents = Array.from(xmlDoc.getElementsByTagName('Contents'));
+                    const prefixes = Array.from(xmlDoc.getElementsByTagName('CommonPrefixes'));
+
+                    const items = [
+                        ...prefixes.map(p => ({ key: p.querySelector('Prefix').textContent, isFolder: true })),
+                        ...contents.map(c => ({
+                            key: c.querySelector('Key').textContent,
+                            lastModified: new Date(c.querySelector('LastModified').textContent),
+                            size: parseInt(c.querySelector('Size').textContent, 10),
+                            isFolder: false
+                        }))
+                    ].filter(item => item.key !== path); // Filter out the current folder itself
 
                     // Pagination logic
+                    let totalItems = items.length;
+                    totalPages = Math.ceil(totalItems / itemsPerPage);
                     const startIndex = (currentPage - 1) * itemsPerPage;
                     const endIndex = startIndex + itemsPerPage;
-
-                    // Slice the items based on pagination
-                    const displayedPrefixes = Array.from(prefixes).slice(startIndex, endIndex);
-                    const displayedKeys = Array.from(keys).slice(startIndex, endIndex - displayedPrefixes.length);
-                    let totalItems = prefixes.length + keys.length;
-                    totalPages = Math.ceil(totalItems / itemsPerPage);
-                    const nextContinuationToken = xmlDoc.querySelector('NextContinuationToken') ? xmlDoc.querySelector('NextContinuationToken').textContent : null;
-                    if (nextContinuationToken) {
-                        // Enable the "Next" button since there are more items to fetch
-                        document.getElementById('nextPage').addEventListener('click', function () {
-                            listObjects(currentPath, nextContinuationToken);
-                        });
-                    } else {
-                        document.getElementById('nextPage').disabled = true;
-                    }
+                    const displayedItems = items.slice(startIndex, endIndex);
 
                     objectList.innerHTML = '';
 
-                    displayedPrefixes.forEach((prefix) => {
-                        const key = prefix.textContent;
-                        if (key === path) {
+                    displayedItems.forEach((item) => {
+                        // Skip files used by the page itself
+                        const fileName = item.key.split('/').pop();
+                        if (['index.html', 's3.js', 'dark-mode.css', 'config.js'].includes(fileName)) {
                             return;
                         }
+
                         const row = document.createElement('tr');
                         const nameCell = document.createElement('td');
-                        const link = createDownloadLink(key);
+                        const link = createDownloadLink(item.key);
 
-                        link.onclick = (e) => {
-                            e.preventDefault();
-                            navigateTo(key);
-                        };
+                        if (item.isFolder) {
+                            link.href = '?prefix=' + item.key; // Update href for better navigation context
+                            link.onclick = (e) => {
+                                e.preventDefault();
+                                currentPage = 1;
+                                // Update URL in browser history
+                                history.pushState(null, '', '?prefix=' + item.key);
+                                navigateTo(item.key);
+                            };
+                        }
 
                         nameCell.appendChild(link);
                         row.appendChild(nameCell);
-                        row.insertCell(-1).textContent = ''; // Empty cells for last modified and size
-                        row.insertCell(-1).textContent = '';
-                        objectList.appendChild(row);
-                    });
-
-                    displayedKeys.forEach((keyElement) => {
-                        const key = keyElement.textContent;
-                        if (key === 'index.html' || key === 's3.js' || key === 'dark-mode.css' || key === 'config.js') {
-                            return;
-                        }
-                        if (key === path) {
-                            return;
-                        }
-
-                        const lastModified = new Date(keyElement.nextElementSibling.textContent);
-                        const sizeElement = keyElement.parentNode.querySelector('Size');
-                        const size = sizeElement ? parseInt(sizeElement.textContent, 10) : NaN;
-                        const row = document.createElement('tr');
-                        const nameCell = document.createElement('td');
-                        const link = createDownloadLink(key);
-
-                        nameCell.appendChild(link);
-                        row.appendChild(nameCell);
-                        row.insertCell(-1).textContent = lastModified.toLocaleString();
-                        row.insertCell(-1).textContent = formatSize(size);
+                        row.insertCell(-1).textContent = item.isFolder ? '—' : item.lastModified.toLocaleString();
+                        row.insertCell(-1).textContent = item.isFolder ? '—' : formatSize(item.size);
                         objectList.appendChild(row);
                     });
 
                     updateBreadcrumb(path);
                     updatePaginationControls();
-                    loading.classList.add('d-none');
                     loading.classList.add('d-none');
                 })
                 .catch((error) => {
@@ -392,7 +393,11 @@
             darkModeStyle.disabled = true;
         }
 
-        navigateTo('');
+        // --- START: MODIFIED CODE ---
+        // Initial call to navigateTo uses the currentPath derived from the URL parameter
+        navigateTo(currentPath);
+        // --- END: MODIFIED CODE ---
+
 
         // Pagination controls logic
         document.getElementById('prevPage').addEventListener('click', function () {
@@ -406,7 +411,12 @@
         });
 
         function updatePaginationControls() {
-            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            // Guard against totalPages being 0
+            if (totalPages === 0) {
+                document.getElementById('pageInfo').textContent = 'Page 1 of 1';
+            } else {
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            }
             document.getElementById('prevPage').disabled = currentPage <= 1;
             document.getElementById('nextPage').disabled = currentPage >= totalPages;
         }
