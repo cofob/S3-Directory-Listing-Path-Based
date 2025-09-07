@@ -17,7 +17,7 @@ function isFolder(key) {
 
 function createDownloadLink(key) {
   let urlEncodedKey = encodeURIComponent(key)
-  const url = `https://${bucketName}.${s3Domain}/${urlEncodedKey}`;
+  const url = `https://${s3Domain}/${bucketName}/${urlEncodedKey}`;
   const link = document.createElement('a');
   link.href = url;
 
@@ -96,7 +96,7 @@ function formatSize(size) {
 
 function listObjects(path) {
   const prefix = path ? `prefix=${path}&` : '';
-  const url = `https://${bucketName}.${s3Domain}/?list-type=2&${prefix}delimiter=%2F`;
+  const url = `https://${s3Domain}/${bucketName}/?list-type=2&${prefix}delimiter=%2F`;
 
   loading.classList.remove('d-none');
   errorAlert.classList.add('d-none');
